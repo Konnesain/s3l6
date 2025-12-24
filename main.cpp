@@ -42,7 +42,7 @@ void getDoctorSchedule(pqxx::connection &conn, string &lastName, string& date)
         string query = 
             "SELECT d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
             "d.id, d.specialization, "
-            "s.work_date, s.start_time, s.end_time "
+            "s.work_date, s.start_time, s.end_time, s.id "
             "FROM doctors d "
             "JOIN schedule s ON s.doctor_id = d.id "
             "WHERE d.last_name = $1 AND s.work_date = $2 AND s.is_available "
@@ -69,10 +69,10 @@ void getDoctorSchedule(pqxx::connection &conn, string &lastName, string& date)
                 "JOIN patients p ON a.patient_id = p.id "
                 "JOIN doctors d ON a.doctor_id = d.id "
                 "JOIN schedule s ON a.schedule_id = s.id "
-                "WHERE d.id = $1 AND s.work_date = $2 "
+                "WHERE d.id = $1 AND s.work_date = $2 AND a.schedule_id = $3 "
                 "ORDER BY a.appointment_time ";
 
-            pqxx::result result2 = txn.exec_params(query, row[1].as<string>(), date);
+            pqxx::result result2 = txn.exec_params(query, row[1].as<string>(), date, row[6].as<string>());
             for (const auto& row : result2)
             {
                 cout << "Пациент: " << row[1].as<string>()
@@ -92,8 +92,9 @@ void getPatientAppointments(pqxx::connection &conn, string &lastName)
     try {
         pqxx::work txn(conn);
         string query = 
-            "SELECT p.last_name, p.first_name, "
-            "d.last_name, d.first_name, d.specialization, d.office_number, "
+            "SELECT p.last_name || ' ' || p.first_name || ' ' || p.middle_name as patient_name, "
+            "d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
+            "d.specialization, d.office_number, "
             "a.appointment_time, s.work_date "
             "FROM patients p "                             
             "JOIN appointments a ON a.patient_id = p.id "
@@ -107,12 +108,12 @@ void getPatientAppointments(pqxx::connection &conn, string &lastName)
         cout << "\n=== Записи пациента ===\n";
         for (const auto& row : result)
         {
-            cout << "Пациент: " << row[0].as<string>() << " " << row[1].as<string>() << "\n"
-                        << "Дата: " << row[7].as<string>()
-                        << ", Время: " << row[6].as<string>() << "\n"
-                        << "Врач: " << row[2].as<string>() << " " << row[3].as<string>()
-                        << " (" << row[4].as<string>() << ")\n"
-                        << "Кабинет: " << row[5].as<string>() 
+            cout << "Пациент: " << row[0].as<string>() << "\n"
+                        << "Дата: " << row[5].as<string>()
+                        << ", Время: " << row[4].as<string>() << "\n"
+                        << "Врач: " << row[1].as<string>()
+                        << " (" << row[2].as<string>() << ")\n"
+                        << "Кабинет: " << row[3].as<string>() 
                         << "\n";
         }
         txn.commit();
@@ -155,7 +156,7 @@ void getTopDoctorsByAppointments(pqxx::connection &conn)
     {
         pqxx::work txn(conn);
         string query = 
-            "SELECT d.id, d.last_name || ' ' || d.first_name as doctor_name, "
+            "SELECT d.id, d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
             "d.specialization, COUNT(a.id) as appointment_count "
             "FROM appointments a "
             "JOIN doctors d ON a.doctor_id = d.id "
@@ -181,7 +182,7 @@ void getTopDoctorsByAppointments(pqxx::connection &conn)
     }
 }
 
-//6 найти врачей работающих в определенный день
+// 6. Найти врачей работающих в определенный день
 void getDoctorsByDate(pqxx::connection &conn, string &date)
 {
     try
@@ -189,7 +190,8 @@ void getDoctorsByDate(pqxx::connection &conn, string &date)
         pqxx::work txn(conn);
         string query = 
             "SELECT s.start_time, s.end_time, " 
-            "d.last_name || ' ' || d.first_name as doctor_name, d.specialization "
+            "d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
+            "d.specialization "
             "FROM schedule s "
             "JOIN doctors d on s.doctor_id = d.id "
             "WHERE s.work_date = $1 AND s.is_available ";
@@ -217,9 +219,9 @@ void getPatientMedicalRecords(pqxx::connection &conn, string &lastName)
     {
         pqxx::work txn(conn);
         string query = 
-            "SELECT p.last_name || ' ' || p.first_name as patient_name, " 
+            "SELECT p.last_name || ' ' || p.first_name || ' ' || p.middle_name as patient_name, " 
             "mr.record_date, mr.diagnosis, mr.recommendations, "
-            "d.last_name || ' ' || d.first_name as doctor_name, "
+            "d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
             "a.appointment_time "
             "FROM patients p "
             "JOIN medical_records mr ON mr.patient_id = p.id "
@@ -285,7 +287,7 @@ void getDoctorsWorkloadByDay(pqxx::connection &conn)
         pqxx::work txn(conn);
 
         string query = 
-            "SELECT d.last_name || ' ' || d.first_name as doctor_name, "
+            "SELECT d.last_name || ' ' || d.first_name || ' ' || d.middle_name as doctor_name, "
             "s.work_date, COUNT(a.id) as appointments_count "
             "FROM doctors d "
             "LEFT JOIN schedule s ON d.id = s.doctor_id "
@@ -316,7 +318,7 @@ void getDoctorsWorkloadByDay(pqxx::connection &conn)
     }
 }
 
-//Врачи по кабинету
+// 10. Врачи по кабинету
 void getDoctorByOffice(pqxx::connection &conn, int officeNumber)
 {
     try
